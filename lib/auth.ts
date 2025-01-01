@@ -1,5 +1,6 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
+import NextAuth, { type DefaultSession } from "next-auth";
+import type { NextAuthConfig as NextAuthConfigType } from "next-auth/core";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
@@ -18,6 +19,17 @@ declare module "next-auth" {
       role: UserRole;
     } & DefaultSession["user"]
   }
+
+  interface User {
+    role: UserRole;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    role?: UserRole;
+    sub?: string;
+  }
 }
 
 // Initialize Resend
@@ -34,19 +46,19 @@ const logWithTimestamp = (message: string, type: 'info' | 'error' | 'success' = 
   console.log(`[${timestamp}] ${icons[type]} ${message}`);
 };
 
-export const authConfig: NextAuthConfig = {
+export const authConfig: NextAuthConfigType = {
   pages: {
     signIn: "/login",
   },
   callbacks: {
-    async session({ session, token }) {
+    async session({ session, token }: { session: any; token: JWT }) {
       if (token.sub && session.user) {
         session.user.id = token.sub;
         session.user.role = token.role as UserRole;
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: JWT; user: any }) {
       if (user) {
         token.role = user.role as UserRole;
       }
