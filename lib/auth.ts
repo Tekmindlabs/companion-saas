@@ -5,12 +5,10 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { Resend } from 'resend';
 import { JWT } from "next-auth/jwt";
-import { User } from "@prisma/client";
+import { Role } from "@prisma/client"; // Import Role enum instead of User
 
-// Define custom types
-type UserRole = "USER" | "ADMIN";
+type UserRole = Role; // Use the Role enum from Prisma
 
-// Extend the Session type
 declare module "next-auth" {
   interface Session {
     user: {
@@ -19,7 +17,7 @@ declare module "next-auth" {
     } & DefaultSession["user"]
   }
 
-  interface User extends NextAuthUser {
+  interface User {
     id: string;
     email: string;
     name?: string | null;
@@ -27,7 +25,6 @@ declare module "next-auth" {
   }
 }
 
-// Extend JWT type
 declare module "next-auth/jwt" {
   interface JWT {
     role?: UserRole;
@@ -36,17 +33,11 @@ declare module "next-auth/jwt" {
   }
 }
 
-// Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Logging helper function
 const logWithTimestamp = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
   const timestamp = new Date().toISOString();
-  const icons = {
-    info: 'ℹ️',
-    error: '❌',
-    success: '✅'
-  };
+  const icons = { info: 'ℹ️', error: '❌', success: '✅' };
   console.log(`[${timestamp}] ${icons[type]} ${message}`);
 };
 
@@ -59,10 +50,9 @@ export const authConfig: AuthOptions = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
+    maxAge: 30 * 24 * 60 * 60,
+    updateAge: 24 * 60 * 60,
   },
-  
   callbacks: {
     async session({ session, token }) {
       if (token && session.user) {
@@ -75,7 +65,7 @@ export const authConfig: AuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role as UserRole;
+        token.role = user.role;
         token.email = user.email;
       }
       return token;
@@ -86,7 +76,7 @@ export const authConfig: AuthOptions = {
       return baseUrl;
     }
   },
-  adapter: PrismaAdapter(db) as any, // Type assertion to resolve adapter compatibility
+  adapter: PrismaAdapter(db),
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -94,42 +84,32 @@ export const authConfig: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials): Promise<User | null> {
+      async authorize(credentials) {
         try {
           if (!credentials?.email || !credentials?.password) {
             logWithTimestamp('Login attempt failed: Missing credentials', 'error');
             return null;
           }
-
+      
           const user = await db.user.findUnique({
             where: { email: credentials.email }
           });
-
+      
           if (!user || !user.password) {
             logWithTimestamp(`Login attempt failed: User not found - ${credentials.email}`, 'error');
             return null;
           }
-
+      
           const isPasswordValid = await bcrypt.compare(
             credentials.password,
             user.password
           );
-
+      
           if (!isPasswordValid) {
             logWithTimestamp(`Login attempt failed: Invalid password - ${credentials.email}`, 'error');
             return null;
           }
-
-          // Convert Prisma User to NextAuth User
-          const nextAuthUser: NextAuthUser = {
-            id: user.id,
-            email: user.email || '',
-            name: user.name,
-            role: user.role as UserRole,
-          };
-
-          logWithTimestamp(`Successful login: ${credentials.email}`, 'success');
-
+      
           // Email notification logic
           if (process.env.RESEND_API_KEY && process.env.RESEND_FROM && user.email) {
             try {
@@ -158,14 +138,18 @@ export const authConfig: AuthOptions = {
               logWithTimestamp(`Failed to send login notification email: ${error}`, 'error');
             }
           }
-
-          return nextAuthUser as any; // Type assertion to resolve return type
+      
+          return {
+            id: user.id,
+            email: user.email || '',
+            name: user.name,
+            role: user.role,
+          };
         } catch (error) {
           logWithTimestamp(`Authorization error: ${error}`, 'error');
           return null;
         }
-      }
-    })
+      }    })
   ],
   events: {
     async signIn({ user }) {
@@ -173,9 +157,6 @@ export const authConfig: AuthOptions = {
     },
     async signOut() {
       logWithTimestamp(`User signed out`, 'info');
-    },
-    async error(error) {
-      logWithTimestamp(`Auth error: ${error}`, 'error');
     }
   }
 };

@@ -12,7 +12,6 @@
     "admin:init": "ts-node-esm --experimental-specifier-resolution=node scripts/admin-init.ts"
   },
   "dependencies": {
-    "@auth/core": "^0.34.2",
     "@auth/prisma-adapter": "^2.7.4",
     "@google/generative-ai": "^0.2.1",
     "@hookform/resolvers": "^3.9.0",
@@ -49,7 +48,6 @@
     "next": "14.1.0",
     "next-auth": "^4.24.11",
     "next-themes": "^0.2.1",
-    "oidc-token-hash": "^5.0.3",
     "openai": "^4.28.4",
     "rate-limiter-flexible": "^3.0.0",
     "react": "^18.2.0",
