@@ -1,13 +1,14 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth, { type DefaultSession, AuthOptions, User as NextAuthUser } from "next-auth";
+import NextAuth from "next-auth";
+import type { DefaultSession, AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { Resend } from 'resend';
-import { JWT } from "next-auth/jwt";
-import { Role } from "@prisma/client"; // Import Role enum instead of User
+import { Role } from "@prisma/client";
 
-type UserRole = Role; // Use the Role enum from Prisma
+// Define types
+type UserRole = Role;
 
 declare module "next-auth" {
   interface Session {
@@ -54,7 +55,7 @@ export const authConfig: AuthOptions = {
     updateAge: 24 * 60 * 60,
   },
   callbacks: {
-    async session({ session, token }) {
+    async session({ session, token }: { session: any; token: any }) {
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
@@ -62,7 +63,7 @@ export const authConfig: AuthOptions = {
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: any; user: any }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
@@ -70,7 +71,7 @@ export const authConfig: AuthOptions = {
       }
       return token;
     },
-    async redirect({ url, baseUrl }) {
+    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
       if (url.startsWith("/")) return `${baseUrl}${url}`;
       else if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
@@ -84,7 +85,7 @@ export const authConfig: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials) {
+      async authorize(credentials: Record<"email" | "password", string> | undefined) {
         try {
           if (!credentials?.email || !credentials?.password) {
             logWithTimestamp('Login attempt failed: Missing credentials', 'error');
@@ -110,7 +111,6 @@ export const authConfig: AuthOptions = {
             return null;
           }
       
-          // Email notification logic
           if (process.env.RESEND_API_KEY && process.env.RESEND_FROM && user.email) {
             try {
               await resend.emails.send({
@@ -149,10 +149,11 @@ export const authConfig: AuthOptions = {
           logWithTimestamp(`Authorization error: ${error}`, 'error');
           return null;
         }
-      }    })
+      }
+    })
   ],
   events: {
-    async signIn({ user }) {
+    async signIn({ user }: { user: any }) {
       logWithTimestamp(`User signed in: ${user.email}`, 'success');
     },
     async signOut() {
