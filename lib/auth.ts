@@ -50,7 +50,7 @@ export const authConfig: NextAuthOptions = { // Changed from AuthOptions
   secret: process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: "/login",
-    error: "/error",
+    error: "/auth/error", 
   },
   session: {
     strategy: "jwt",
@@ -182,10 +182,7 @@ export const authConfig: NextAuthOptions = { // Changed from AuthOptions
   }
 };
 
-const handler = NextAuth(authConfig);
-export const { handlers, auth, signIn, signOut } = { 
-  handlers: handler,
-  auth: handler.auth,
-  signIn: handler.signIn,
-  signOut: handler.signOut
-};
+export const handler = NextAuth(authConfig);
+export const auth = handler.auth;
+export const signIn = handler.signIn;
+export const signOut = handler.signOut;
