@@ -7,4 +7,8 @@ declare module "next-auth" {
       role: "USER" | "ADMIN";
     } & DefaultSession["user"];
   }
+
+  interface User {
+    role: "USER" | "ADMIN";
+  }
 }

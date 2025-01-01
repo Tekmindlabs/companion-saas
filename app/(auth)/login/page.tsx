@@ -38,34 +38,35 @@ export default function LoginPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       setIsLoading(true);
-
+  
       const result = await signIn("credentials", {
         email: values.email,
         password: values.password,
         redirect: false,
       });
-
-      if (result?.error) {
+  
+      if (!result) {
+        throw new Error("Something went wrong");
+      }
+  
+      if (result.error) {
         toast({
           title: "Error",
-          description: "Invalid email or password.",
+          description: result.error || "Invalid email or password.",
           variant: "destructive",
         });
         return;
       }
-
+  
       toast({
         title: "Success",
         description: "Logged in successfully!",
       });
-
       router.push("/dashboard"); // or wherever you want to redirect after login
-      router.refresh();
-
     } catch (error) {
       toast({
         title: "Error",
-        description: "Something went wrong. Please try again.",
+        description: "An error occurred during login.",
         variant: "destructive",
       });
     } finally {

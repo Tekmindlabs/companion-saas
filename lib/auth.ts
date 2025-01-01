@@ -1,13 +1,24 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth from "next-auth";
-import type { NextAuthConfig } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
+import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { getUserById } from "@/lib/user";
 import { Resend } from 'resend';
 import { JWT } from "next-auth/jwt";
-import { Session } from "next-auth";
+
+// Define custom types
+type UserRole = "USER" | "ADMIN";
+
+// Extend the Session type instead of User
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      role: UserRole;
+    } & DefaultSession["user"]
+  }
+}
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -23,31 +34,36 @@ const logWithTimestamp = (message: string, type: 'info' | 'error' | 'success' = 
   console.log(`[${timestamp}] ${icons[type]} ${message}`);
 };
 
-export const authConfig = {
+export const authConfig: NextAuthConfig = {
   pages: {
     signIn: "/login",
   },
   callbacks: {
-    async session({ session, token }: { session: Session; token: JWT }) {
+    async session({ session, token }) {
       if (token.sub && session.user) {
         session.user.id = token.sub;
+        session.user.role = token.role as UserRole;
       }
       return session;
     },
-    async jwt({ token }: { token: JWT }) {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role as UserRole;
+      }
       if (!token.sub) return token;
 
       const existingUser = await getUserById(token.sub);
       if (!existingUser) return token;
 
-      token.role = existingUser.role;
+      token.role = existingUser.role as UserRole;
       return token;
     }
   },
   adapter: PrismaAdapter(db),
   session: { strategy: "jwt" },
   providers: [
-    Credentials({
+    CredentialsProvider({
+      name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
@@ -88,61 +104,62 @@ export const authConfig = {
         }
 
         // Send login notification email
-        logWithTimestamp(`Attempting to send login notification email to ${user.email}`, 'info');
-        
-        try {
-          const emailResponse = await resend.emails.send({
-            from: process.env.RESEND_FROM!,
-            to: [user.email],
-            subject: "New Login to Your Account",
-            html: `
-              <div style="font-family: Arial, sans-serif; padding: 20px;">
-                <h2>New Login Detected</h2>
-                <p>Hello ${user.name || user.email},</p>
-                <p>We detected a new login to your account.</p>
-                <p><strong>Details:</strong></p>
-                <ul>
-                  <li>Time: ${new Date().toLocaleString()}</li>
-                  <li>Email: ${user.email}</li>
-                  <li>Login IP: ${credentials.email}</li>
-                </ul>
-                <p>If this wasn't you, please contact support immediately.</p>
-                <p>Best regards,<br>Your Application Team</p>
-              </div>
-            `,
-          });
-          
-          logWithTimestamp(`Email sent successfully! Response ID: ${emailResponse.id}`, 'success');
-          
-        } catch (error) {
-          logWithTimestamp(`Failed to send login notification email to ${user.email}`, 'error');
-          logWithTimestamp(`Error details: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
-          
+        if (process.env.RESEND_API_KEY && process.env.RESEND_FROM) {
           try {
-            await db.auditLog.create({
-              data: {
-                userId: user.id,
-                action: 'LOGIN_EMAIL_FAILED',
-                details: {
-                  error: error instanceof Error ? error.message : 'Unknown error',
-                  timestamp: new Date().toISOString(),
-                  email: user.email
-                },
-              }
+            const emailResponse = await resend.emails.send({
+              from: process.env.RESEND_FROM,
+              to: [user.email],
+              subject: "New Login to Your Account",
+              html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px;">
+                  <h2>New Login Detected</h2>
+                  <p>Hello ${user.name || user.email},</p>
+                  <p>We detected a new login to your account.</p>
+                  <p><strong>Details:</strong></p>
+                  <ul>
+                    <li>Time: ${new Date().toLocaleString()}</li>
+                    <li>Email: ${user.email}</li>
+                  </ul>
+                  <p>If this wasn't you, please contact support immediately.</p>
+                  <p>Best regards,<br>Your Application Team</p>
+                </div>
+              `,
             });
-            logWithTimestamp('Audit log created for failed email attempt', 'info');
-          } catch (logError) {
-            logWithTimestamp(`Failed to create audit log: ${logError instanceof Error ? logError.message : 'Unknown error'}`, 'error');
+            
+            logWithTimestamp(`Email sent successfully!`, 'success');
+            
+          } catch (error) {
+            logWithTimestamp(`Failed to send login notification email to ${user.email}`, 'error');
+            logWithTimestamp(`Error details: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+            
+            try {
+              await db.auditLog.create({
+                data: {
+                  userId: user.id,
+                  action: 'LOGIN_EMAIL_FAILED',
+                  details: {
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                    timestamp: new Date().toISOString(),
+                    email: user.email
+                  },
+                }
+              });
+              logWithTimestamp('Audit log created for failed email attempt', 'info');
+            } catch (logError) {
+              logWithTimestamp(`Failed to create audit log: ${logError instanceof Error ? logError.message : 'Unknown error'}`, 'error');
+            }
           }
         }
 
         return {
           id: user.id,
           email: user.email,
-          name: user.name,
-          role: user.role,
+          name: user.name || null,
+          role: user.role as UserRole,
         };
       }
     })
   ]
-} satisfies NextAuthConfig;
+};
+
+export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
