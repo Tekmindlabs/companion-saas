@@ -10,8 +10,6 @@ export async function middleware(request: NextRequest) {
     });
 
     const pathname = request.nextUrl.pathname;
-    console.log('Request pathname:', pathname);
-    console.log('Session token:', token);
 
     // Protect dashboard routes
     if (!token && pathname.startsWith('/dashboard')) {
@@ -20,11 +18,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    // Redirect authenticated users away from auth pages
-    if (token && (pathname === '/login' || pathname === '/register')) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-
+    // Allow all other requests to proceed
     return NextResponse.next();
   } catch (error) {
     console.error('Middleware error:', error);

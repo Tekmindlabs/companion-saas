@@ -46,7 +46,7 @@ export default function LoginPage() {
       });
   
       if (!result) {
-        throw new Error("Something went wrong");
+        throw new Error("Authentication failed");
       }
   
       if (result.error) {
@@ -62,11 +62,8 @@ export default function LoginPage() {
         title: "Success",
         description: "Logged in successfully!",
       });
-      
-      // Add a small delay before redirect
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 100);
+  
+      router.push("/dashboard");
   
     } catch (error) {
       console.error("Login error:", error);
