@@ -4,8 +4,22 @@ import { auth } from "./lib/auth";
 
 export async function middleware(request: NextRequest) {
   try {
-    const session = await auth();
+    // Get the pathname
     const pathname = request.nextUrl.pathname;
+
+        // Add the console.log statements here
+        console.log('Request pathname:', request.nextUrl.pathname);
+        console.log('Session:', session);
+        
+    // Try to get the session
+    let session;
+    try {
+      session = await auth();
+    } catch (authError) {
+      console.error('Auth error:', authError);
+      // If there's an auth error, treat it as no session
+      session = null;
+    }
 
     // Protect dashboard routes
     if (!session && pathname.startsWith('/dashboard')) {
