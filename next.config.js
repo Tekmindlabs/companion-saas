@@ -6,16 +6,8 @@ const nextConfig = {
   images: { unoptimized: true },
   experimental: {
     serverComponentsExternalPackages: ['@prisma/client'],
-  },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        'oidc-token-hash': false
-      };
-    }
-    return config;
-  },
+  }
+  // Remove the webpack config since we don't need OIDC fallback anymore
 };
 
 module.exports = nextConfig;

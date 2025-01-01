@@ -1,6 +1,6 @@
-import { PrismaAdapter } from "@auth/prisma-adapter";
+import { NextAuthOptions } from "next-auth"; // Changed from AuthOptions
 import NextAuth from "next-auth";
-import type { DefaultSession, AuthOptions } from "next-auth";
+import type { DefaultSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
@@ -13,16 +13,17 @@ type UserRole = Role;
 declare module "next-auth" {
   interface Session {
     user: {
-      id: string;
-      role: UserRole;
+      id?: string; // Made optional to match base type
+      role?: UserRole; // Made optional to match pattern
+      email?: string | null; // Made optional and nullable to match base type
     } & DefaultSession["user"]
   }
 
   interface User {
-    id: string;
-    email: string;
+    id?: string; // Made optional to match base type
+    email?: string | null; // Made optional and nullable
     name?: string | null;
-    role: UserRole;
+    role?: UserRole;
   }
 }
 
@@ -30,7 +31,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     role?: UserRole;
     id?: string;
-    email?: string;
+    email?: string | null;
   }
 }
 
@@ -42,7 +43,7 @@ const logWithTimestamp = (message: string, type: 'info' | 'error' | 'success' = 
   console.log(`[${timestamp}] ${icons[type]} ${message}`);
 };
 
-export const authConfig: AuthOptions = {
+export const authConfig: NextAuthOptions = { // Changed from AuthOptions
   debug: process.env.NODE_ENV === 'development',
   secret: process.env.NEXTAUTH_SECRET,
   pages: {
@@ -55,15 +56,27 @@ export const authConfig: AuthOptions = {
     updateAge: 24 * 60 * 60,
   },
   callbacks: {
-    async session({ session, token }: { session: any; token: any }) {
+    async session({ 
+      session, 
+      token 
+    }: { 
+      session: any; 
+      token: JWT;
+    }) {
       if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
-        session.user.email = token.email as string;
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.email = token.email;
       }
       return session;
     },
-    async jwt({ token, user }: { token: any; user: any }) {
+    async jwt({ 
+      token, 
+      user 
+    }: { 
+      token: JWT; 
+      user: User | undefined;
+    }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
@@ -71,13 +84,18 @@ export const authConfig: AuthOptions = {
       }
       return token;
     },
-    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+    async redirect({ 
+      url, 
+      baseUrl 
+    }: { 
+      url: string; 
+      baseUrl: string;
+    }) {
       if (url.startsWith("/")) return `${baseUrl}${url}`;
       else if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
     }
   },
-  adapter: PrismaAdapter(db),
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -85,7 +103,7 @@ export const authConfig: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials: Record<"email" | "password", string> | undefined) {
+      async authorize(credentials) {
         try {
           if (!credentials?.email || !credentials?.password) {
             logWithTimestamp('Login attempt failed: Missing credentials', 'error');
@@ -141,7 +159,7 @@ export const authConfig: AuthOptions = {
       
           return {
             id: user.id,
-            email: user.email || '',
+            email: user.email,
             name: user.name,
             role: user.role,
           };
@@ -153,7 +171,7 @@ export const authConfig: AuthOptions = {
     })
   ],
   events: {
-    async signIn({ user }: { user: any }) {
+    async signIn({ user }: { user: User }) {
       logWithTimestamp(`User signed in: ${user.email}`, 'success');
     },
     async signOut() {
