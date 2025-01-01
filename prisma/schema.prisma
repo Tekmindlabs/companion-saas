@@ -1,0 +1,230 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  USER
+  ADMIN
+}
+
+enum DataRetentionPolicy {
+  THIRTY_DAYS
+  NINETY_DAYS
+  ONE_YEAR
+  INDEFINITE
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+  PENDING
+}
+
+// User and Authentication
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime? // Soft delete for GDPR compliance
+  isActive      Boolean   @default(true)
+
+  // Privacy and GDPR
+  dataRetentionPolicy DataRetentionPolicy @default(THIRTY_DAYS)
+  marketingConsent    ConsentStatus       @default(PENDING)
+  dataProcessingConsent ConsentStatus     @default(PENDING)
+  lastConsentUpdate   DateTime?
+  
+  // Data export/deletion requests
+  dataRequests       DataRequest[]
+  
+  // User data
+  preferences        UserPreference?
+  companions         Companion[]      @relation("UserCompanions")
+  conversations      Conversation[]
+  auditLogs         AuditLog[]
+  
+  // Authentication
+  accounts          Account[]
+  sessions          Session[]
+
+  @@index([email])
+  @@index([role])
+  @@index([deletedAt])
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  lastActive   DateTime @default(now())
+  ipAddress    String?
+  userAgent    String?  @db.Text
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expires])
+}
+
+// GDPR and Privacy Management
+model DataRequest {
+  id        String           @id @default(cuid())
+  userId    String
+  type      String          // EXPORT or DELETE
+  status    String          // PENDING, PROCESSING, COMPLETED
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  completedAt DateTime?
+  data      Json?           // For export requests
+  
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model UserPreference {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  communicationMode    String    @default("text") // text, voice, or both
+  preferredLanguage    String    @default("en")
+  theme                String    @default("light")
+  notificationsEnabled Boolean   @default(true)
+  dataRetentionDays   Int       @default(30)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Content Management
+model Companion {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  description   String
+  instructions  String   @db.Text
+  seed          String   @db.Text
+  image         String?
+  isPublic      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  user          User     @relation("UserCompanions", fields: [userId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@index([userId])
+  @@index([deletedAt])
+}
+
+model Conversation {
+  id          String    @id @default(cuid())
+  userId      String
+  companionId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  expiresAt   DateTime?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companion   Companion @relation(fields: [companionId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@index([userId])
+  @@index([companionId])
+  @@index([deletedAt])
+  @@index([expiresAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  content        String       @db.Text
+  role           String      // user or assistant
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+  metadata       Json?       // For storing additional message metadata
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([deletedAt])
+}
+
+// System Administration
+model AuditLog {
+  id          String    @id @default(cuid())
+  userId      String
+  action      String
+  details     Json
+  ipAddress   String?
+  userAgent   String?   @db.Text
+  createdAt   DateTime  @default(now())
+  
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  category  String   // security, performance, features, etc.
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+// Rate Limiting and Security
+model RateLimit {
+  id        String   @id @default(cuid())
+  key       String   @unique // IP or userId
+  points    Int      @default(0)
+  expire    DateTime
+
+  @@index([expire])
+}
