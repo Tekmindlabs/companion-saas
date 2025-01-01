@@ -3,27 +3,30 @@ import type { NextRequest } from "next/server";
 import { auth } from "./lib/auth";
 
 export async function middleware(request: NextRequest) {
-  const session = await auth();
-  
-  // Get the pathname of the request
-  const path = request.nextUrl.pathname;
+  try {
+    const session = await auth();
+    const pathname = request.nextUrl.pathname;
 
-  // If the user is not authenticated and trying to access a protected route
-  if (!session && path.startsWith('/dashboard')) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', path);
-    return NextResponse.redirect(loginUrl);
+    // Protect dashboard routes
+    if (!session && pathname.startsWith('/dashboard')) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('callbackUrl', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Redirect authenticated users away from auth pages
+    if (session && (pathname === '/login' || pathname === '/register')) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
+    return NextResponse.next();
+  } catch (error) {
+    console.error('Middleware error:', error);
+    // Redirect to login on error
+    return NextResponse.redirect(new URL('/login', request.url));
   }
-
-  // If the user is authenticated and trying to access auth pages
-  if (session && (path === '/login' || path === '/register')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
-  return NextResponse.next();
 }
 
-// Update the matcher configuration
 export const config = {
   matcher: [
     '/dashboard/:path*',

@@ -1,9 +1,8 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth, { type DefaultSession, AuthOptions } from "next-auth";
+import NextAuth, { type DefaultSession, AuthOptions, User as NextAuthUser } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { getUserById } from "@/lib/user";
 import { Resend } from 'resend';
 import { JWT } from "next-auth/jwt";
 import { User } from "@prisma/client";
@@ -11,7 +10,7 @@ import { User } from "@prisma/client";
 // Define custom types
 type UserRole = "USER" | "ADMIN";
 
-// Extend the Session type instead of User
+// Extend the Session type
 declare module "next-auth" {
   interface Session {
     user: {
@@ -20,7 +19,7 @@ declare module "next-auth" {
     } & DefaultSession["user"]
   }
 
-  interface User {
+  interface User extends NextAuthUser {
     id: string;
     email: string;
     name?: string | null;
@@ -28,18 +27,19 @@ declare module "next-auth" {
   }
 }
 
+// Extend JWT type
 declare module "next-auth/jwt" {
   interface JWT {
     role?: UserRole;
-    sub?: string;
     id?: string;
+    email?: string;
   }
 }
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Add logging helper function
+// Logging helper function
 const logWithTimestamp = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
   const timestamp = new Date().toISOString();
   const icons = {
@@ -62,32 +62,29 @@ export const authConfig: AuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
-    async session({ session, token }: { session: any; token: JWT }) {
-      if (session.user) {
+    async session({ session, token }) {
+      if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
+        session.user.email = token.email as string;
       }
       return session;
     },
-    async jwt({ token, user, account }: { token: JWT; user: User | null; account: any }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = user.role as UserRole;
+        token.email = user.email;
       }
-
-      if (account) {
-        token.accessToken = account.access_token;
-      }
-
       return token;
     },
-    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+    async redirect({ url, baseUrl }) {
       if (url.startsWith("/")) return `${baseUrl}${url}`;
       else if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
     }
   },
-  adapter: PrismaAdapter(db),
+  adapter: PrismaAdapter(db) as any, // Type assertion to resolve adapter compatibility
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -95,7 +92,7 @@ export const authConfig: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials, req): Promise<User | null> {
+      async authorize(credentials): Promise<User | null> {
         try {
           if (!credentials?.email || !credentials?.password) {
             logWithTimestamp('Login attempt failed: Missing credentials', 'error');
@@ -120,6 +117,14 @@ export const authConfig: AuthOptions = {
             logWithTimestamp(`Login attempt failed: Invalid password - ${credentials.email}`, 'error');
             return null;
           }
+
+          // Convert Prisma User to NextAuth User
+          const nextAuthUser: NextAuthUser = {
+            id: user.id,
+            email: user.email || '',
+            name: user.name,
+            role: user.role as UserRole,
+          };
 
           logWithTimestamp(`Successful login: ${credentials.email}`, 'success');
 
@@ -152,7 +157,7 @@ export const authConfig: AuthOptions = {
             }
           }
 
-          return user;
+          return nextAuthUser as any; // Type assertion to resolve return type
         } catch (error) {
           logWithTimestamp(`Authorization error: ${error}`, 'error');
           return null;
@@ -161,13 +166,13 @@ export const authConfig: AuthOptions = {
     })
   ],
   events: {
-    async signIn({ user }: { user: User }) {
+    async signIn({ user }) {
       logWithTimestamp(`User signed in: ${user.email}`, 'success');
     },
-    async signOut({ token }: { token: JWT }) {
+    async signOut() {
       logWithTimestamp(`User signed out`, 'info');
     },
-    async error(error: Error) {
+    async error(error) {
       logWithTimestamp(`Auth error: ${error}`, 'error');
     }
   }

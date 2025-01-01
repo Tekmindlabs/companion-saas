@@ -62,8 +62,14 @@ export default function LoginPage() {
         title: "Success",
         description: "Logged in successfully!",
       });
-      router.push("/dashboard"); // or wherever you want to redirect after login
+      
+      // Add a small delay before redirect
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 100);
+  
     } catch (error) {
+      console.error("Login error:", error);
       toast({
         title: "Error",
         description: "An error occurred during login.",

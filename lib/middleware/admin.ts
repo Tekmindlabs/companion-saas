@@ -4,23 +4,29 @@ import type { NextRequest } from 'next/server';
 
 export async function adminMiddleware(req: NextRequest) {
   try {
-    const token = await getToken({ req });
+    // Add a check for NEXTAUTH_SECRET
+    if (!process.env.NEXTAUTH_SECRET) {
+      throw new Error('NEXTAUTH_SECRET is not defined');
+    }
+
+    const token = await getToken({ 
+      req,
+      secret: process.env.NEXTAUTH_SECRET 
+    });
     
-    // Add null check before accessing token properties
     if (!token) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    // Check for role
     if (token.role !== 'ADMIN') {
       return new NextResponse('Forbidden', { status: 403 });
     }
 
-    // If all checks pass, allow the request to continue
     return NextResponse.next();
   } catch (error) {
     console.error('Middleware error:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    // Return a more specific error response
+    return new NextResponse('Authentication error', { status: 401 });
   }
 }
 
