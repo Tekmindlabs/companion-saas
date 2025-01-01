@@ -1,4 +1,4 @@
-import { NextAuthOptions } from "next-auth"; // Changed from AuthOptions
+import { NextAuthOptions } from "next-auth/core/types";
 import NextAuth from "next-auth";
 import type { DefaultSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -6,6 +6,8 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { Resend } from 'resend';
 import { Role } from "@prisma/client";
+import { JWT } from "next-auth/jwt";
+import { User } from "next-auth";
 
 // Define types
 type UserRole = Role;
@@ -23,7 +25,7 @@ declare module "next-auth" {
     id?: string; // Made optional to match base type
     email?: string | null; // Made optional and nullable
     name?: string | null;
-    role?: UserRole;
+
   }
 }
 
