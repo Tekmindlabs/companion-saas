@@ -3,12 +3,12 @@ import NextAuth from "next-auth";
 import type { DefaultSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { db } from "@/lib/db";
+import { db } from "./db";
 import { Resend } from 'resend';
 import { Role } from "@prisma/client";
 import { JWT } from "next-auth/jwt";
 import { User } from "next-auth";
-
+import type { NextAuthConfig } from "next-auth"
 // Define types
 type UserRole = Role;
 
