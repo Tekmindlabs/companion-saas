@@ -183,6 +183,8 @@ export const authConfig: NextAuthOptions = { // Changed from AuthOptions
 };
 
 export const handler = NextAuth(authConfig);
-export const auth = handler.auth;
-export const signIn = handler.signIn;
-export const signOut = handler.signOut;
+
+// Export these as functions, not the direct handler properties
+export const auth = () => handler.auth();
+export const signIn = (...args: any[]) => handler.signIn(...args);
+export const signOut = (...args: any[]) => handler.signOut(...args);
