@@ -7,42 +7,61 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
   email: z.string().email({
     message: "Please enter a valid email address.",
+  }),
+  password: z.string().min(8, {
+    message: "Password must be at least 8 characters.",
   }),
 });
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       email: "",
+      password: "",
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       setIsLoading(true);
-      // Handle magic link login here
-      toast({
-        title: "Magic link sent!",
-        description: "Check your email for the login link.",
+
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
       });
+
+      if (result?.error) {
+        toast({
+          title: "Error",
+          description: "Invalid email or password.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Success",
+        description: "Logged in successfully!",
+      });
+
+      router.push("/dashboard"); // or wherever you want to redirect after login
+      router.refresh();
+
     } catch (error) {
       toast({
         title: "Error",
@@ -64,7 +83,7 @@ export default function LoginPage() {
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-bold">Welcome Back</h1>
         <p className="text-muted-foreground">
-          Enter your email to sign in to your account
+          Sign in to your account
         </p>
       </div>
 
@@ -89,12 +108,31 @@ export default function LoginPage() {
             )}
           />
 
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <Input
+                    type="password"
+                    placeholder="Enter your password"
+                    {...field}
+                    disabled={isLoading}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
           <Button
             type="submit"
             className="w-full"
             disabled={isLoading}
           >
-            {isLoading ? "Sending link..." : "Send Magic Link"}
+            {isLoading ? "Signing in..." : "Sign In"}
           </Button>
         </form>
       </Form>
