@@ -1,6 +1,7 @@
 {
   "name": "aivy-companion",
   "version": "0.1.0",
+  "type": "commonjs",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "admin:init": "ts-node scripts/admin-init.ts"
+    "admin:init": "ts-node-esm --experimental-specifier-resolution=node scripts/admin-init.ts"
   },
   "dependencies": {
     "@auth/core": "^0.34.2",
@@ -31,6 +32,8 @@
     "@radix-ui/react-separator": "^1.1.1",
     "@radix-ui/react-slot": "^1.1.0",
     "@radix-ui/react-tabs": "^1.1.0",
+    "@radix-ui/react-toast": "^1.2.4",
+    "@types/dotenv": "^6.1.1",
     "@zilliz/milvus2-sdk-node": "^2.3.5",
     "ai": "^3.0.12",
     "bcryptjs": "^2.4.3",
@@ -39,6 +42,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "crypto-browserify": "^3.12.1",
+    "dotenv": "^16.4.7",
     "framer-motion": "^11.0.3",
     "langchain": "^0.1.21",
     "lucide-react": "^0.344.0",
