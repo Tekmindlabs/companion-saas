@@ -4,10 +4,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: { unoptimized: true },
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client'],
-  }
-  // Remove the webpack config since we don't need OIDC fallback anymore
+  serverExternalPackages: ['@prisma/client']  // Moved out of experimental and renamed
 };
 
 module.exports = nextConfig;
